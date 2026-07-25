@@ -1,0 +1,286 @@
+🔍 AgencyOS — Full Improvement & Fix List
+🔴 BROKEN RIGHT NOW (will crash or silently fail)
+#	Where	What breaks	Root cause
+1	Dashboard → Recent Activity	500 error on load	invoices.number column was missing — fixed
+2	Clients list	500 error on load	clients.logo_url column was missing — fixed
+3	Time Tracker widget	Button does nothing	Calls POST /api/time/timer — route doesn't exist
+4	Client Feedback	Form submits, nothing happens	Calls POST /api/client/feedback — route doesn't exist
+5	Leads → Stage names	UI and API use different stage enums	UI has DEMO_GIVEN, API doesn't. Leads can get stuck in unknown stages
+6	Lead Contact History	Can add contacts, but can't view them from the Kanban board	Detail panel to read lead_contacts is missing from sales.tsx
+7	File Uploads (production)	Uploads work in dev, vanish after redeploy	Files stored in artifacts/api-server/uploads/ on disk — wiped on restart
+🟡 YOUR LIST — Item by Item Deep Dive
+1. 📧 Lead Email + Contact History
+Current state: Email field exists in DB. Contact history (lead_contacts) table exists with type, subject, body. But:
+
+No actual email sending — just storing a record that contact happened
+Contact history is not visible from the kanban board — you have to know the lead ID
+No email templates, no cc/bcc, no reply tracking
+No attachment on contact records
+What needs building:
+
+Connect Resend/Nodemailer → POST /api/leads/:id/email to actually send
+Lead detail drawer/page showing full lead_contacts timeline
+Email template per stage (e.g., follow-up after demo)
+attachmentUrl column on lead_contacts
+2. 📈 Revenue Pipeline Forecasting
+Current state: Leads have a value field (numeric) and stage. The pipeline summary (GET /api/leads/pipeline-summary) exists but only counts leads per stage.
+
+What's missing:
+
+No weighted forecasting (e.g., NEGOTIATION = 70% probability × value)
+No monthly/quarterly rollup
+No chart showing expected vs actual revenue
+No expectedCloseDate field on leads
+What needs building:
+
+Add expectedCloseDate, probability (%) columns to leads table
+GET /api/leads/forecast?period=monthly endpoint
+Revenue forecast chart on dashboard
+3. 📊 Project Gantt View
+Current state: Projects have startDate and dueDate stored as plain text strings. Tasks have a dueDate but no startDate.
+
+What's missing entirely:
+
+No task dependencies (no dependsOnId column)
+No milestone concept
+No percentComplete on tasks or projects
+startDate/dueDate on tasks stored as text — can't do date math reliably
+No Gantt library integrated in frontend
+What needs building:
+
+Add startDate (timestamp), percentComplete (integer), dependsOnId (FK self-ref) to tasks table
+Change project/task dates from text to timestamp
+GET /api/projects/:id/gantt — returns tasks with deps in a format Gantt libs expect
+Integrate @dhtmlx/gantt or react-gantt-task in frontend
+4. 💰 Project Budget Tracking
+Current state: Projects table has zero financial columns — no budget, no spent, no currency.
+
+What needs building (DB first):
+
+ALTER TABLE projects ADD COLUMN budget numeric(12,2);
+ALTER TABLE projects ADD COLUMN currency text DEFAULT 'INR';
+ALTER TABLE projects ADD COLUMN budget_spent numeric(12,2) DEFAULT 0;
+
+Link invoices to projects (add projectId FK on invoices)
+GET /api/projects/:id/budget — returns budget vs invoiced vs paid
+Budget utilization card in project detail view
+5. 📎 File Attachments on Projects & Tasks
+Current state: A single POST /api/uploads route exists. Files go to disk. No attachment table — nowhere to link an uploaded file back to a task or project.
+
+What needs building:
+
+New file_attachments table:
+CREATE TABLE file_attachments (
+  id text PRIMARY KEY,
+  entity_type text NOT NULL,  -- 'task' | 'project' | 'lead' | 'invoice'
+  entity_id text NOT NULL,
+  filename text NOT NULL,
+  url text NOT NULL,
+  uploaded_by text REFERENCES users(id),
+  created_at timestamp DEFAULT now()
+);
+
+GET/POST /api/attachments?entityType=task&entityId=xxx
+Move file storage to Cloudflare R2 or S3 (disk-based storage is deleted on redeploy)
+Attachment list + upload UI on task drawer and project detail
+6. ⏱️ Task Time Tracking
+Current state: A time tracker widget exists in the frontend but calls POST /api/time/timer — this route does not exist. The backend has zero time tracking.
+
+What needs building (entire feature from scratch):
+
+New time_entries table:
+CREATE TABLE time_entries (
+  id text PRIMARY KEY,
+  task_id text REFERENCES tasks(id) ON DELETE CASCADE,
+  project_id text REFERENCES projects(id),
+  user_id text REFERENCES users(id),
+  started_at timestamp NOT NULL,
+  ended_at timestamp,
+  duration_min integer,  -- computed on stop
+  note text,
+  is_billable boolean DEFAULT true,
+  created_at timestamp DEFAULT now()
+);
+
+POST /api/time/start — creates entry with started_at = now()
+POST /api/time/stop/:id — sets ended_at, computes duration_min
+GET /api/time?taskId=&userId=&from=&to=
+GET /api/projects/:id/time-summary — total billable hours per project
+Timer widget already in frontend — just needs the API wired up
+7. ✅ Subtasks
+Current state: tasks table has no parentId. No subtask concept exists anywhere in DB or API.
+
+What needs building:
+
+Add parentId text REFERENCES tasks(id) ON DELETE CASCADE to tasks table
+API already has GET/POST /api/tasks — extend to accept parentId
+GET /api/tasks/:id/subtasks
+Frontend: collapsible subtask list under each kanban card
+Progress bar on parent task showing X of Y subtasks done
+8. 🗓️ Content Calendar Approval + Image Upload
+Current state: content_posts table has status (IDEA, SCRIPT_WRITING, SHOOT_PENDING, EDITING, READY, SCHEDULED, PUBLISHED). An approvalStatus or approval flow does not exist. referenceLinks is a JSON array of URLs — no actual image upload tied to posts.
+
+What needs building:
+
+Add to content_posts table:
+ALTER TABLE content_posts ADD COLUMN approved_by text REFERENCES users(id);
+ALTER TABLE content_posts ADD COLUMN approved_at timestamp;
+ALTER TABLE content_posts ADD COLUMN approval_status text DEFAULT 'PENDING'; -- PENDING | APPROVED | REJECTED
+ALTER TABLE content_posts ADD COLUMN rejection_note text;
+ALTER TABLE content_posts ADD COLUMN media_urls jsonb DEFAULT '[]';  -- actual uploaded image/video URLs
+
+POST /api/content/:id/approve and POST /api/content/:id/reject
+Image upload: use existing /api/uploads but link the returned URL to media_urls
+Client-facing approval: client portal can view post and click Approve/Reject
+Notification to team when client approves/rejects
+9. 📬 Invoice Email to Client
+Current state: Invoices are created and stored. No email sending. No PDF generation. Clients have an email field.
+
+What needs building:
+
+PDF generation: use pdf-lib or puppeteer server-side to render invoice → PDF
+Invoice template already has all fields (line items, tax, bank details, logo)
+POST /api/invoices/:id/send-email:
+Generate PDF
+Send via Resend/Nodemailer to client.email
+Update invoice status to SENT
+Log in activity_logs
+"Send Invoice" button in invoice UI → triggers the above
+Add sentAt timestamp column to invoices
+10. 🔁 Recurring Invoices
+Current state: No recurring concept anywhere. Each invoice is one-off.
+
+What needs building:
+
+New invoice_templates table:
+CREATE TABLE invoice_templates (
+  id text PRIMARY KEY,
+  client_id text REFERENCES clients(id),
+  recurrence text NOT NULL,  -- 'MONTHLY' | 'QUARTERLY' | 'YEARLY'
+  day_of_month integer,       -- e.g., 1 = 1st of month
+  next_run_at timestamp,
+  line_items jsonb,
+  tax_percent numeric,
+  is_active boolean DEFAULT true,
+  created_at timestamp DEFAULT now()
+);
+
+Cron job (node-cron in API server) runs daily, checks next_run_at <= now(), auto-creates invoice, optionally emails it, advances next_run_at
+UI to create/manage recurring templates
+Recurring badge on generated invoices so you know they were auto-created
+11. ✍️ E-Signature on Proposals
+Current state: Proposals are created, edited, and stored. No signing flow, no PDF, no send-to-client.
+
+What needs building:
+
+Add to proposals table:
+ALTER TABLE proposals ADD COLUMN signed_at timestamp;
+ALTER TABLE proposals ADD COLUMN signed_by_name text;
+ALTER TABLE proposals ADD COLUMN signed_by_email text;
+ALTER TABLE proposals ADD COLUMN signature_data text;  -- base64 canvas drawing
+ALTER TABLE proposals ADD COLUMN sign_token text UNIQUE; -- one-time URL token
+ALTER TABLE proposals ADD COLUMN sent_at timestamp;
+
+POST /api/proposals/:id/send — generates sign_token, emails client a link
+Public page /sign/:token (no login required) — renders proposal, shows signature pad
+POST /api/proposals/:id/sign — saves signature, marks signed_at
+Use react-signature-canvas on the public signing page
+PDF of signed proposal with signature embedded
+12. 🏖️ Leave Balance Tracking
+Current state: leave_requests exist with types (CASUAL, SICK, EARNED, UNPAID). No quota, no balance — system has no idea how many days each employee is entitled to or has used.
+
+What needs building:
+
+New leave_balances table:
+CREATE TABLE leave_balances (
+  id text PRIMARY KEY,
+  user_id text REFERENCES users(id) ON DELETE CASCADE,
+  year integer NOT NULL,
+  casual_total integer DEFAULT 12,
+  casual_used integer DEFAULT 0,
+  sick_total integer DEFAULT 6,
+  sick_used integer DEFAULT 0,
+  earned_total integer DEFAULT 15,
+  earned_used integer DEFAULT 0,
+  updated_at timestamp DEFAULT now(),
+  UNIQUE(user_id, year)
+);
+
+Auto-create balance row for each user at start of year (cron job)
+When a leave is approved: UPDATE leave_balances SET {type}_used = {type}_used + days
+When a leave is rejected/cancelled: reverse the deduction
+GET /api/leaves/balance?userId=&year= — returns remaining per type
+Balance card visible to employee + admin on the leave page
+13. 🔗 Leave ↔ Attendance Integration
+Current state: Leave and Attendance are completely separate — approving a leave does nothing to attendance. If an employee is on approved leave, they still show as "absent" in attendance with no explanation.
+
+What needs building:
+
+When leave is approved: auto-insert attendance records for each leave day with status ON_LEAVE
+Add leaveId FK to attendance table so you can trace back
+Attendance report: show PRESENT / ABSENT / ON_LEAVE / HOLIDAY
+Add HOLIDAY support: a holidays table with dates, so public holidays don't count as absent
+ALTER TABLE attendance ADD COLUMN leave_id text REFERENCES leave_requests(id);
+ALTER TABLE attendance ADD COLUMN status text DEFAULT 'PRESENT'; -- PRESENT | ABSENT | ON_LEAVE | HOLIDAY
+CREATE TABLE holidays (
+  id text PRIMARY KEY,
+  name text NOT NULL,
+  date date NOT NULL UNIQUE,
+  year integer
+);
+
+14. 🌐 Client Portal — Login + Granular Permissions
+Current state: There's a portal.tsx page but clients cannot log in. The only public access is via share_token for the content calendar. There is no client-facing auth, no client accounts, no permission system.
+
+What needs building:
+
+New client_users table (separate from users):
+CREATE TABLE client_users (
+  id text PRIMARY KEY,
+  client_id text REFERENCES clients(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  email text NOT NULL UNIQUE,
+  password_hash text NOT NULL,
+  permissions jsonb DEFAULT '{}',
+  -- permissions example: { "invoices": "view", "projects": "view", "content": "approve", "proposals": "sign" }
+  is_active boolean DEFAULT true,
+  created_at timestamp DEFAULT now()
+);
+
+POST /api/portal/login — separate JWT for client sessions
+Protected client routes under /portal/* that check clientId from JWT
+Permission middleware: canView('invoices'), canApprove('content'), etc.
+Admin UI: invite client user, toggle each permission per module
+Client sees only their own data (invoices, projects, proposals, content) — never other clients
+🗄️ DATABASE — Missing Tables Summary
+Table	Priority	Why needed
+time_entries	🔴 High	Task time tracking is broken without it
+file_attachments	🔴 High	No way to attach files to tasks/projects
+leave_balances	🔴 High	Leave system is unusable without quotas
+invoice_templates	🟡 Medium	Recurring invoice automation
+client_users	🟡 Medium	Client portal login
+holidays	🟡 Medium	Proper leave/attendance integration
+expenses	🟢 Low	Agency cost tracking
+notifications	🟢 Low	In-app alert system
+📄 PDF & CSV EXPORT — Current State: Zero
+Nothing exports anywhere. Needs to be added for:
+
+Document	Format	Library
+Invoice	PDF	pdf-lib (lightweight, no browser)
+Proposal	PDF	pdf-lib with signature embed
+Quotation	PDF	pdf-lib
+Purchase Order	PDF	pdf-lib
+Attendance Report	CSV	fast-csv or plain string
+Lead Pipeline	CSV	fast-csv
+Time Entries	CSV	fast-csv
+Leave Report	CSV + PDF	Both
+⚙️ BACKEND — General Improvements
+Issue	Fix
+No pagination on any list endpoint	Add ?page=1&limit=20 to clients, invoices, tasks, leads
+Dates stored as text (projects, tasks)	Migrate to timestamp so sorting and date math work
+No input validation on most routes	Add Zod schema validation on all POST/PATCH bodies
+File uploads stored on disk	Move to Cloudflare R2 / S3 — disk is wiped on redeploy
+No rate limiting on most endpoints	Already have it on auth — extend to upload and email routes
+ADMIN_PASSWORD using default	Set it in Replit Secrets (task #3 proposed earlier)
+No audit trail on financial records	Log every invoice/proposal status change with who + when
+Stage mismatch on leads	Sync the 7 UI stages with the API enum

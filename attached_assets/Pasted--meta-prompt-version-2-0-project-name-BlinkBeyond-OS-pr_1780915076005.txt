@@ -1,0 +1,381 @@
+{
+  "meta": {
+    "prompt_version": "2.0",
+    "project_name": "BlinkBeyond OS",
+    "project_aliases": ["BlinkBeyond Agency OS", "BlinkBeyond Management System"],
+    "owner": "BlinkBeyond (Founder: Nilesh Rajput)",
+    "primary_use_case": "All-in-one operating system for digital agencies to manage clients, sales, projects, content, social media, finances, and team productivity.",
+    "target_users": [
+      "Agency owners and founders",
+      "Sales teams and closers",
+      "Social media managers",
+      "Designers, editors, content creators",
+      "Project managers and account managers",
+      "Finance and billing teams",
+      "Clients (view-only portal users)"
+    ],
+    "target_market": [
+      "Digital marketing agencies",
+      "Web & app development agencies",
+      "Social media/content agencies",
+      "Branding & creative studios",
+      "Freelance and boutique agencies"
+    ],
+    "design_constraint": "KEEP the existing UI/branding style and global layout as-is where possible; only enhance UX, performance, and capabilities. Do not radically change core design language unless strictly necessary."
+  },
+
+  "high_level_goals": {
+    "business_goals": [
+      "Provide a one-stop solution for managing all agency operations in one platform.",
+      "Eliminate chaos across multiple tools (sheets, WhatsApp, Trello, CRMs) and centralize client, content, and financial workflows.",
+      "Make it so intuitive and powerful that BlinkBeyond can sell it as a SaaS to other agencies in the future.",
+      "Support multi-tenant SaaS with industrial-grade security, observability, and extensibility."
+    ],
+    "product_principles": [
+      "Single source of truth for each client across sales, content, tasks, and finance.",
+      "Opinionated workflows that teach best practices (especially in sales and content).",
+      "Design for scale: many clients, many team members, heavy content volume.",
+      "API-first, modular architecture, ready for integrations and AI copilots.",
+      "Industrial-grade: multi-tenant, secure, observable, auditable."
+    ]
+  },
+
+  "tenancy_and_security": {
+    "model": "Multi-tenant SaaS",
+    "requirements": [
+      "Single codebase supporting multiple agency tenants.",
+      "Strong tenant isolation at the data layer (tenant_id everywhere, row-level security or per-tenant schemas).",
+      "Option to later move large clients to isolated databases or clusters without code rewrite.",
+      "Encryption in transit (HTTPS/TLS) and at rest for sensitive data.",
+      "Secrets management for API keys and OAuth tokens for social media integrations.",
+      "Comprehensive role-based access control across modules and clients.",
+      "Support for SSO (Google/Microsoft/Okta), MFA for admins/finance, secure password flows.",
+      "Fine-grained permissions per module (CRM, Sales, Projects, Content, Finance, Reporting)."
+    ]
+  },
+
+  "user_roles_and_permissions": {
+    "roles": [
+      {
+        "name": "Owner",
+        "description": "Agency owner with full control over all tenants under BlinkBeyond and internal settings.",
+        "capabilities": [
+          "Full access to all modules and clients within their agency tenant.",
+          "Manage billing, subscription plans, global settings, and integrations.",
+          "Access audit logs and observability dashboards."
+        ]
+      },
+      {
+        "name": "Admin",
+        "description": "Admin for a specific agency tenant.",
+        "capabilities": [
+          "Manage users, roles, and permissions within the tenant.",
+          "Assign tasks, leads, projects, and client ownership.",
+          "Access all finance data, funnels, and content calendars within the tenant.",
+          "Configure automations, templates, and integrations."
+        ]
+      },
+      {
+        "name": "Sales",
+        "description": "Salesperson or closer managing leads and deals.",
+        "capabilities": [
+          "Access leads/contacts, deals, and sales funnels they own.",
+          "Create and update deals, log activities, and move items across funnel stages.",
+          "Trigger proposals and quotations linked to deals (with admin-configured limits)."
+        ]
+      },
+      {
+        "name": "Project Manager",
+        "description": "Manages projects, timelines, and client delivery.",
+        "capabilities": [
+          "Create and manage projects and tasks.",
+          "Assign tasks to team members and track progress.",
+          "View client context, content calendars, and dependencies.",
+          "Limited view of finance (e.g., budget vs burn) as configured by admin."
+        ]
+      },
+      {
+        "name": "Social Media Manager",
+        "description": "Handles content planning, publishing, and basic analytics.",
+        "capabilities": [
+          "Access content calendars and assets for assigned clients.",
+          "Create, edit, and schedule posts across platforms.",
+          "See performance metrics and generate reports for assigned clients."
+        ]
+      },
+      {
+        "name": "Designer / Editor",
+        "description": "Creates visual and video assets.",
+        "capabilities": [
+          "View tasks and briefs assigned to them.",
+          "Upload assets and link to content items.",
+          "Comment, respond to feedback, and update status."
+        ]
+      },
+      {
+        "name": "Finance",
+        "description": "Manages invoices, quotations, proposals, and payments.",
+        "capabilities": [
+          "Create and manage quotations, proposals, invoices, and payment tracking.",
+          "View client financial history and reports.",
+          "Configure finance templates and taxes."
+        ]
+      },
+      {
+        "name": "Client (Portal User)",
+        "description": "Client accessing their own portal.",
+        "capabilities": [
+          "View only their own content calendar and post statuses.",
+          "Approve/reject content, add comments, and download reports.",
+          "View their own proposals, invoices, and payment status."
+        ]
+      }
+    ],
+    "permission_model": {
+      "type": "RBAC with resource-level permissions",
+      "notes": [
+        "Ability to restrict access by client, by module, and by specific entity.",
+        "All audit-logged actions should include user_id, role, tenant_id, timestamp, and resource."
+      ]
+    }
+  },
+
+  "core_modules": [
+    "Client & CRM",
+    "Sales Funnel & Smart Sales Coaching",
+    "Projects & Task Management",
+    "Content Calendar & Social Media Workflow",
+    "Client Portal",
+    "Finance (Proposals, Quotations, Invoices)",
+    "Social Media Integrations & Analytics",
+    "Automation & AI Copilot",
+    "Reporting & Monthly Client Reports",
+    "Observability, Audit & Compliance",
+    "Integrations & Public API"
+  ],
+
+  "module_specs": {
+    "client_and_crm": {
+      "description": "Single source of truth for every client and lead.",
+      "features": [
+        "Client intake form with service categories and dynamic questions based on selected services.",
+        "Service categories: Website/App Development, Shopify/E-commerce, Social Media Management, Paid Ads/Performance Marketing, Branding/Creative, AI Automation, Other (custom).",
+        "For each category, show tailored question sets (goals, budget, timelines, references, technical stack preferences, content pillars, brand voice, competitors).",
+        "Contact management: multiple contacts per client, roles, and communication history.",
+        "Activity timeline: calls, emails, meetings, notes, tasks, proposals, invoices linked to the client.",
+        "Ability to convert a lead into a client with all history preserved.",
+        "Client tags, segments, and filters for targeting."
+      ]
+    },
+
+    "sales_funnel_and_smart_sales": {
+      "description": "Kanban-style sales pipeline with built-in best practices and coaching.",
+      "features": [
+        "Multi-pipeline support (e.g., Websites, Social Media Retainers, One-off Campaigns).",
+        "Configurable stages per pipeline (New Lead, Qualified, Proposal Sent, Negotiation, Won, Lost, Upsell, etc.).",
+        "Smooth drag-and-drop cards between stages with real-time UI updates and minimal lag.",
+        "Deal cards showing key info: client, contact, deal value, services, expected close date, owner, tags.",
+        "Stage-level checklists and required fields (e.g., for Qualified: budget confirmed, authority identified, need defined, timeline confirmed).",
+        "Embedded playbooks and micro-coaching per stage: recommended questions, objection handling, ideal follow-up cadence.",
+        "Smart suggestions for lead sources and tactics per pipeline (LinkedIn outreach, Instagram DMs, referrals, cold email, etc.).",
+        "Lead scoring model based on profile (industry, budget, fit) and behavior (opens, clicks, replies, meetings).",
+        "Automations: when a deal enters a stage, auto-create follow-up tasks, send email/WhatsApp templates, or start nurture flows.",
+        "Sales dashboard: pipeline value, win rate, sales velocity, bottlenecks, and individual performance metrics."
+      ]
+    },
+
+    "projects_and_task_management": {
+      "description": "Central project and task hub for all services.",
+      "features": [
+        "Project creation from accepted deals or directly from client.",
+        "Project types: Website/App, Social Media Retainer, Campaign, Branding, Custom.",
+        "Milestones and phases per project with due dates and dependencies.",
+        "Task management with statuses (To-do, In Progress, Review, Done), due dates, time estimates, assignees, and watchers.",
+        "Today view for each user: tasks due today, overdue, and upcoming.",
+        "Admin and PM views aggregating all tasks by user, role, client, or project.",
+        "Ability for each user to add personal to-dos linked or unlinked to a client/project.",
+        "Comments, file attachments, and activity history on tasks.",
+        "Optional time tracking per task/project for profitability insights (future-ready)."
+      ]
+    },
+
+    "content_calendar_and_social_workflow": {
+      "description": "Per-client content planning, production, and approval pipeline.",
+      "features": [
+        "Per-client content calendars with Month, Week, and List views.",
+        "Content item representing a piece of content (post/reel/short) with attributes: platforms, media, captions, tags/hashtags, status, due date, publish date, owner, reviewer.",
+        "Status pipeline for content: Idea, Briefed, In Design, In Copy, Internal Review, Client Review, Approved, Scheduled, Published.",
+        "Ability to attach multiple assets (images, videos, docs) and maintain version history.",
+        "Internal comments vs client-visible comments separation.",
+        "Quick filters by platform, status, pillar, and assignee.",
+        "Tight integration with task management: each content item can auto-create or link to tasks for designers/editors/copywriters."
+      ]
+    },
+
+    "client_portal": {
+      "description": "Secure, branded portal for each client with limited, role-specific views.",
+      "features": [
+        "Unique portal URL per client (white-label ready; supports custom domain later).",
+        "Secure login for client users with view-only, scoped access to their data.",
+        "Client sees only their own content calendar, not other clients or internal data.",
+        "Content view shows upcoming and past posts, statuses, previews, and captions.",
+        "Client can approve/reject content with comments; approvals sync back to internal workspace and update statuses.",
+        "View-only access to proposals, invoices, and reports for that client.",
+        "Notification settings for clients (email reminders for items awaiting approval, reports ready, etc.)."
+      ]
+    },
+
+    "finance_proposals_quotations_invoices": {
+      "description": "End-to-end finance module tied to sales and projects.",
+      "features": [
+        "Template-driven proposals, quotations, invoices, and retainers with logos, brand colors, and legal terms.",
+        "Predefined line item catalogs for services (e.g., Website development package, Monthly social media retainer, Ad management fees) with customizable pricing.",
+        "Create proposal/quotation directly from a deal, auto-pulling client and service details.",
+        "Convert accepted proposals into active projects and invoices.",
+        "Digital acceptance/signature via secure link.",
+        "Integration with payment gateways (e.g., Razorpay/PayU/Stripe) for online payments.",
+        "Finance dashboard per client: total billed, paid, outstanding, and basic profitability view.",
+        "Export to PDF and spreadsheet for accounting.",
+        "Support for taxes, discounts, and multiple currencies (future-ready)."
+      ]
+    },
+
+    "social_media_integrations_and_analytics": {
+      "description": "Connect and manage social media accounts with one-click publishing and centralized analytics.",
+      "integrations": [
+        "Instagram",
+        "Facebook Pages",
+        "YouTube",
+        "LinkedIn Profiles and Pages",
+        "X/Twitter",
+        "TikTok (future)",
+        "Others as needed via modular connectors"
+      ],
+      "features": [
+        "OAuth-based connection flow for each platform with secure token storage.",
+        "Per-client mapping of social accounts and status (connected/disconnected).",
+        "One-click multi-platform publishing: select platforms, customize captions per platform, attach media, schedule or publish now.",
+        "Background job/queue system for publishing to each platform asynchronously with retries and error handling.",
+        "Publishing logs that show success/failure per platform and error messages.",
+        "Centralized analytics dashboard aggregating metrics from all connected platforms: followers, reach, impressions, engagement, clicks, video views, profile visits.",
+        "Per-client analytics view with date-range filters and platform filters.",
+        "Post-level analytics with ranking of top-performing posts.",
+        "Competitor tracking: ability to add competitor profiles and compare key metrics over time.",
+        "Data ready for automated monthly reports."
+      ]
+    },
+
+    "automation_and_ai": {
+      "description": "Rule-based automation engine plus AI copilots across modules.",
+      "automation_engine": {
+        "type": "If-this-then-that (trigger-condition-action) system",
+        "examples": [
+          "When a deal moves to 'Proposal Sent' and no response for 3 days, create a follow-up task and send a reminder email.",
+          "When an invoice is overdue by 7 days, send payment reminder and notify finance.",
+          "When content status is 'Client Review' for more than X days, notify account manager.",
+          "When a new lead is created from a specific source, auto-assign to a specific salesperson."
+        ]
+      },
+      "ai_copilots": [
+        "Sales copilot: suggest next best actions, draft follow-up messages, highlight risky deals.",
+        "Content copilot: generate content ideas based on client niche, suggest hooks, captions, and posting times.",
+        "Analytics copilot: surface insights like best-performing platforms, content formats, and lead sources.",
+        "Operations copilot: detect bottlenecks in workflows (e.g., stages where deals stall, content approval delays)."
+      ]
+    },
+
+    "reporting_and_monthly_client_reports": {
+      "description": "Advanced reporting for internal decision-making and client-facing PDFs.",
+      "features": [
+        "Internal dashboards for sales (pipeline, conversion, revenue), operations (tasks, project load), and content performance.",
+        "Client-level reports summarizing social media performance, content output, and campaign results.",
+        "One-click 'Generate Monthly Report' for each client, producing PDF/Slides with: overview, KPIs, graphs, best posts, and action recommendations.",
+        "Ability to schedule monthly reports (e.g., 1st of every month) and auto-email to clients.",
+        "Export options for CSV/XLS for further analysis."
+      ]
+    },
+
+    "observability_audit_compliance": {
+      "description": "Industrial-grade monitoring, logging, and compliance-ready audit system.",
+      "observability": [
+        "Structured logging for all services with tenant_id, user_id, and correlation IDs.",
+        "Metrics collection for API latency, error rates, job queue processing, third-party API failures.",
+        "Tracing of critical flows (e.g., publishing post, generating report, creating invoice).",
+        "Multi-tenant dashboards to monitor health per tenant and globally.",
+        "Alerting and notifications for error spikes and SLA breaches."
+      ],
+      "audit_trail": [
+        "Append-only audit logs capturing who did what, when, and from where (IP/agent).",
+        "Audit events for: logins, permission changes, deal stage changes, finance edits, content approvals, posting actions, integration changes.",
+        "Queryable audit interface with filters by user, tenant, action type, date range.",
+        "Exportable logs for compliance reviews."
+      ],
+      "compliance_and_governance": [
+        "Data retention policies per tenant and per module.",
+        "Right to delete or anonymize personal data for compliance.",
+        "Documentation-ready models for ISO-like security posture and Indian enterprise expectations."
+      ]
+    },
+
+    "integrations_and_public_api": {
+      "description": "Extensible integration framework and public API surface.",
+      "public_api": [
+        "REST/GraphQL endpoints to read/write key entities: clients, deals, tasks, projects, content items, invoices, analytics.",
+        "OAuth- or token-based authentication for third-party integrations.",
+        "Webhooks for critical events (lead created, deal updated, task completed, invoice paid, post published, report generated)."
+      ],
+      "integration_targets": [
+        "Email providers (Gmail/Outlook/SendGrid).",
+        "Chat/communication tools (Slack, Microsoft Teams, WhatsApp Business APIs).",
+        "Accounting tools (Tally, Zoho Books, QuickBooks in future).",
+        "Storage (Google Drive, Dropbox, OneDrive).",
+        "BI tools and external dashboards (via API/Webhooks)."
+      ]
+    }
+  },
+
+  "ux_requirements": {
+    "general": [
+      "Preserve existing BlinkBeyond design language and layout where possible.",
+      "Make drag-and-drop interactions smooth and responsive even with large boards.",
+      "Provide clear separation between internal views (team) and client portal views.",
+      "Offer powerful filters and search in every major module.",
+      "Use consistent patterns for modals, drawers, and contextual menus."
+    ],
+    "onboarding_and_guidance": [
+      "Guided onboarding checklists for new tenants (set up clients, connect socials, create pipelines, configure finance).",
+      "In-app tours and contextual tooltips especially around sales funnels and content workflows.",
+      "Template libraries (sales funnel templates, content calendar templates, proposal templates) per industry."
+    ]
+  },
+
+  "non_functional_requirements": {
+    "performance": [
+      "Support thousands of clients and hundreds of users per tenant with acceptable latency.",
+      "Optimize lists, boards, and calendars for large data sets with pagination and lazy loading."
+    ],
+    "scalability": [
+      "Horizontally scalable backend services and queues.",
+      "Cloud-native deployment approach with environment separation (dev, staging, prod).",
+      "Feature flags to roll out new capabilities gradually."
+    ],
+    "reliability": [
+      "Graceful degradation when third-party APIs (Instagram, Facebook, etc.) fail.",
+      "Retries and dead-letter handling for publishing jobs.",
+      "Backups, rollbacks, and recovery strategies for critical data."
+    ]
+  },
+
+  "developer_guidelines": {
+    "architecture": [
+      "Use modular domain-driven structure: auth, tenants, crm, sales, projects, content, finance, social, automation, reporting.",
+      "Implement an event-driven pattern where possible (events for created/updated entities used by automations and integrations)."
+    ],
+    "quality": [
+      "Write production-grade, compilable code; avoid pseudo-code.",
+      "Ensure type safety where possible and handle error paths explicitly.",
+      "Add thorough unit and integration tests for critical flows.",
+      "Document APIs and integration endpoints clearly."
+    ]
+  }
+}

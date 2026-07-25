@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "AgencyOS"
+version = "1.0.0"
+id = "artifacts/agency-os"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21486
+
+[services.development]
+run = "[ -d /home/runner/workspace/node_modules ] || pnpm -C /home/runner/workspace install --frozen-lockfile && pnpm --filter @workspace/agency-os run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/agency-os", "run", "build" ]
+publicDir = "artifacts/agency-os/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21486"
+BASE_PATH = "/"

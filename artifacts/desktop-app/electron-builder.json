@@ -1,0 +1,28 @@
+{
+  "appId": "com.agencyos.app",
+  "productName": "AgencyOS",
+  "directories": {
+    "output": "dist"
+  },
+  "files": [
+    "main.cjs",
+    "package.json",
+    {
+      "from": "../api-server/dist",
+      "to": "api-server/dist"
+    },
+    {
+      "from": "../agency-os/dist",
+      "to": "agency-os/dist"
+    }
+  ],
+  "win": {
+    "target": ["nsis", "portable"]
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true
+  }
+}

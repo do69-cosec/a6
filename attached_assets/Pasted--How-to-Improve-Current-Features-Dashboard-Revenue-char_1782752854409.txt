@@ -1,0 +1,61 @@
+📋 How to Improve Current Features
+Dashboard
+
+Revenue chart has no date range filter (always shows all-time)
+"My Tasks" only shows tasks assigned to current user — no team overview for managers
+Clients
+
+No client logo/avatar upload
+Client health status is manually set — no auto-calculation from invoice payment history
+No activity timeline (who changed what and when)
+Sales / Leads
+
+No email/contact history tracking per lead
+No automatic stage-change date tracking for "days in stage" accuracy (the field exists in DB but isn't always updated)
+No revenue forecasting from pipeline values
+Projects
+
+No GET /projects/:id endpoint — detail view isn't possible from the API
+No project timeline / Gantt view
+No budget tracking (no actual vs. estimated cost)
+No file attachments
+Tasks
+
+No GET /tasks/:id endpoint
+No due date reminders or overdue highlighting
+No time tracking per task
+No subtasks
+Content Calendar
+
+No actual social media publishing (posts are tracked, not published)
+No image/asset upload to the post directly — only a link field
+No approval workflow (client approve before publish)
+Invoices
+
+No PDF generation/download
+No email-to-client button
+No recurring invoice support
+currency field missing from the Invoice type (TypeScript error in frontend)
+Quotations
+
+No PDF download
+No expiry date reminder
+Proposals
+
+No PDF export
+No client e-signature
+Attendance
+
+No monthly report / export to CSV
+No leave balance deduction when leave is approved
+Leaves
+
+Leave balance (total days available) not tracked — only requests are stored
+No integration with attendance (approved leave doesn't mark attendance)
+Client Portal
+
+Only shows content calendar — invoices, project status, and proposals are not visible to the client
+No client login (currently access is by raw clientId in URL — anyone with the link can view it)
+Purchase Orders
+
+Needs to be fully built — the backend API and DB schema already exist, only the frontend is missing

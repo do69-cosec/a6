@@ -1,0 +1,516 @@
+# AgencyOS — Feature Improvement Prompt
+
+> Paste this directly into your AI coding assistant (Cursor / Replit AI / Claude Code).
+> Stack: React 19 + Vite + Tailwind CSS + TanStack Query + Node.js + Express 5 + PostgreSQL + Drizzle ORM
+
+---
+
+## TASK OVERVIEW
+
+Implement the following 4 improvements to the AgencyOS platform:
+
+1. **Universal Search** — add search bar to: Tasks, Sales/CRM, Content Calendar, Hawan Hub, Invoices, Quotations, Purchase Orders, Proposals
+2. **Finance & Docs Section Restructure** — merge all finance pages under a single tabbed layout with sub-navigation
+3. **Excel Export / Spreadsheet View** — add Excel-compatible export and optional in-page spreadsheet grid for Finance section
+4. **Dashboard (Home) UI Overhaul** — redesign the home dashboard with better layout, richer stats, and improved visual hierarchy
+
+---
+
+## 1. UNIVERSAL SEARCH COMPONENT
+
+### Component: `SearchBar.jsx`
+
+Create a reusable search component that works across all listed pages.
+
+```jsx
+// components/common/SearchBar.jsx
+// Props: placeholder, value, onChange, onClear, className
+// Behavior:
+//   - Controlled input (value + onChange)
+//   - Shows clear (X) button when input has value
+//   - 300ms debounce on onChange (use useDeferredValue or setTimeout)
+//   - Icon: search icon on left (lucide-react Search icon)
+//   - Keyboard: Escape key clears and blurs the input
+//   - Styling: rounded-xl border border-border bg-background px-4 py-2 w-full max-w-sm
+//   - On mobile: expand to full width
+```
+
+### Pages to Update
+
+Add `SearchBar` to each of the following pages. In each case, filter the existing data client-side first, then fallback to API query param if data is large.
+
+#### Tasks (`/tasks`)
+- Search fields: `title`, `assignee.name`, `project.name`
+- Filter logic: case-insensitive includes match
+- Place: top of page, left of view-toggle (Kanban/List)
+- URL param: `?q=searchterm` (update URL without page reload using `useSearchParams`)
+
+#### Sales / CRM (`/sales`)
+- Search fields: `title`, `companyName`, `email`, `stage`
+- Place: top of leads list, right-aligned
+- Also filter the funnel chart: dim non-matching leads' stage counts
+- URL param: `?q=searchterm`
+
+#### Content Calendar (`/content`)
+- Search fields: `caption`, `platform`, `status`, `client.companyName`
+- Place: above calendar/list toggle
+- In calendar view: highlight matching dates, grey out non-matching posts
+- In list view: filter rows normally
+- URL param: `?q=searchterm`
+
+#### Hawan Hub (`/hawan`)
+- Search fields: `platform`, `handle`, `status`
+- Place: above social accounts grid
+- Filter social account cards in real-time
+
+#### Finance Pages (Invoices, Quotations, Purchase Orders, Proposals)
+- These are handled inside the unified Finance layout (see Section 2)
+- Search fields per page:
+  - Invoices: `number`, `client.companyName`, `status`, `total`
+  - Quotations: `number`, `client.companyName`, `status`
+  - Purchase Orders: `number`, `vendorName`, `status`
+  - Proposals: `title`, `client.companyName`, `status`
+- Place: inside each tab's content area, top-left of the table
+
+---
+
+## 2. FINANCE & DOCS SECTION RESTRUCTURE
+
+### Goal
+Replace individual sidebar links for Invoices, Quotations, Purchase Orders, Proposals with a **single "Finance & Docs" sidebar item** that opens a tabbed page.
+
+### Sidebar Change
+```
+Before:
+  Finance & Docs
+    ├── Invoices          (/invoices)
+    ├── Quotations        (/quotations)
+    ├── Purchase Orders   (/purchase-orders)
+    └── Proposals         (/proposals)
+
+After:
+  Finance & Docs          (/finance)          ← single route
+```
+
+### Route: `/finance`
+
+Create a new page `FinancePage.jsx` with a horizontal tab bar at the top.
+
+```jsx
+// pages/FinancePage.jsx
+
+// Tab structure:
+const TABS = [
+  { key: "invoices",        label: "Invoices",        icon: FileText  },
+  { key: "quotations",      label: "Quotations",      icon: FileCheck },
+  { key: "purchase-orders", label: "Purchase Orders", icon: ShoppingCart },
+  { key: "proposals",       label: "Proposals",       icon: Briefcase },
+];
+
+// Active tab stored in URL: /finance?tab=invoices (default)
+// Use useSearchParams to read/set active tab
+// Switching tab = pushState URL change, no page reload
+
+// Layout:
+// ┌─────────────────────────────────────────────────────┐
+// │  Finance & Docs                    [+ New] [Export] │
+// │─────────────────────────────────────────────────────│
+// │  [Invoices] [Quotations] [Purchase Orders] [Proposals] │  ← tab bar
+// │─────────────────────────────────────────────────────│
+// │  [SearchBar]          [Filter dropdown] [Excel btn] │
+// │                                                     │
+// │  <TabContent />       ← renders existing page logic │
+// └─────────────────────────────────────────────────────┘
+
+// Each tab renders the existing page component but WITHOUT its own header/breadcrumb
+// Just the table + actions content portion
+```
+
+### Tab Bar Styling
+```css
+/* Tab bar: horizontal scrollable row */
+.finance-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1.5rem;
+}
+
+.finance-tab {
+  padding: 10px 18px;
+  font-size: 14px;
+  border-radius: 8px 8px 0 0;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.finance-tab[aria-selected="true"] {
+  color: var(--text-primary);
+  border-bottom: 2px solid var(--primary);
+  font-weight: 500;
+}
+```
+
+---
+
+## 3. EXCEL EXPORT + SPREADSHEET VIEW (Finance Section)
+
+### A. Excel Export Button
+
+Add an **"Export to Excel"** button in the Finance page header (visible in all tabs).
+
+```jsx
+// Use the 'xlsx' (SheetJS) library
+// npm install xlsx
+
+import * as XLSX from 'xlsx';
+
+function exportToExcel(data, sheetName, filename) {
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+
+  // Auto-width columns
+  const colWidths = Object.keys(data[0] || {}).map(key => ({
+    wch: Math.max(key.length, ...data.map(row => String(row[key] ?? '').length))
+  }));
+  ws['!cols'] = colWidths;
+
+  XLSX.writeFile(wb, filename);
+}
+
+// Usage per tab:
+// Invoices:  exportToExcel(invoices, 'Invoices', 'AgencyOS_Invoices.xlsx')
+// Quotations: exportToExcel(quotations, 'Quotations', 'AgencyOS_Quotations.xlsx')
+// etc.
+
+// Button placement: top-right of Finance page header
+// Icon: FileSpreadsheet from lucide-react
+// Label: "Export Excel"
+// Variant: outline button
+```
+
+### Export Data Mapping
+
+For each tab, map API data to Excel-friendly flat objects:
+
+```js
+// Invoices export columns:
+{ 'Invoice #': inv.number, 'Client': inv.client.companyName, 'Status': inv.status,
+  'Issue Date': inv.issueDate, 'Due Date': inv.dueDate, 'Total (₹)': inv.total }
+
+// Quotations export columns:
+{ 'Quote #': q.number, 'Client': q.client.companyName, 'Status': q.status,
+  'Valid Until': q.validUntil, 'Total (₹)': q.total }
+
+// Purchase Orders export columns:
+{ 'PO #': po.number, 'Vendor': po.vendorName, 'Status': po.status,
+  'Order Date': po.orderDate, 'Total (₹)': po.total }
+
+// Proposals export columns:
+{ 'Title': p.title, 'Client': p.client.companyName, 'Status': p.status,
+  'Created': p.createdAt, 'Value (₹)': p.value }
+```
+
+### B. Optional: Inline Spreadsheet View (Toggle)
+
+Add a **"Spreadsheet View"** toggle button next to Export in the Finance header.
+
+```jsx
+// When toggled ON: render data in an editable grid using '@tanstack/react-table'
+// Columns are editable inline (click to edit cell, press Enter to save)
+// Changes call PATCH /api/{resource}/:id with updated field
+// When toggled OFF: return to normal card/table view
+
+// Use react-table with:
+//   - useReactTable hook
+//   - Editable cell component: <EditableCell value onChange onBlur />
+//   - Row selection checkboxes for bulk delete
+//   - Sticky header row
+
+// Spreadsheet grid styling:
+// - Dense rows: 36px height
+// - Font: 13px monospace for numbers, 13px sans for text
+// - Selected cell: blue outline ring
+// - Edited (unsaved) cell: yellow background tint
+// - Border: 1px solid #e2e8f0 between cells
+```
+
+---
+
+## 4. DASHBOARD (HOME) UI OVERHAUL
+
+### Goal
+Transform the existing basic dashboard into a premium agency command center with clear visual hierarchy, actionable data, and a professional feel.
+
+### Layout Structure
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  Good morning, Nilesh 👋          Today: Mon, 14 Jul 2025  [🔔]  │
+│──────────────────────────────────────────────────────────────────│
+│                                                                  │
+│  [STAT CARD]  [STAT CARD]  [STAT CARD]  [STAT CARD]             │
+│  Revenue ₹    Active       Tasks Due    Open Leads               │
+│  MTD          Projects     Today        (CRM)                    │
+│                                                                  │
+│  ┌─────────────────────────────┐  ┌─────────────────────────┐   │
+│  │   Revenue Trend (6 months)  │  │   Project Health        │   │
+│  │   Line chart + area fill    │  │   Donut: On Track /     │   │
+│  │   ₹ axis, month labels      │  │   At Risk / Delayed     │   │
+│  └─────────────────────────────┘  └─────────────────────────┘   │
+│                                                                  │
+│  ┌───────────────────────────┐  ┌───────────────────────────┐   │
+│  │  📋 Tasks Due Today       │  │  🔥 Sales Pipeline        │   │
+│  │  List: task + assignee    │  │  Stage breakdown bar      │   │
+│  │  + project + priority dot │  │  + total pipeline value   │   │
+│  └───────────────────────────┘  └───────────────────────────┘   │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │  📅 Content Calendar — This Week                         │   │
+│  │  7-day mini strip: Mon Tue Wed Thu Fri Sat Sun           │   │
+│  │  Posts per day shown as platform-color dots              │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │  🕐 Recent Activity Feed                                  │   │
+│  │  Timeline list: invoice sent, task completed, lead added │   │
+│  └──────────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Stat Cards (Top Row)
+
+```jsx
+// 4 cards in a CSS grid: grid-cols-2 md:grid-cols-4 gap-4
+
+const STAT_CARDS = [
+  {
+    label: "Revenue MTD",
+    value: "₹2,45,000",
+    change: "+12% vs last month",
+    changeType: "positive",  // green
+    icon: IndianRupee,
+    api: "GET /api/dashboard/stats → revenue_mtd"
+  },
+  {
+    label: "Active Projects",
+    value: "8",
+    change: "2 ending this week",
+    changeType: "warning",   // amber
+    icon: FolderOpen,
+    api: "GET /api/dashboard/stats → active_projects"
+  },
+  {
+    label: "Tasks Due Today",
+    value: "5",
+    change: "3 high priority",
+    changeType: "danger",    // red if > 0
+    icon: CheckSquare,
+    api: "GET /api/dashboard/stats → tasks_due_today"
+  },
+  {
+    label: "Open Leads",
+    value: "14",
+    change: "₹8.2L pipeline",
+    changeType: "neutral",
+    icon: TrendingUp,
+    api: "GET /api/dashboard/stats → open_leads"
+  }
+];
+
+// Card design:
+// - White background, border border-border, rounded-xl, p-5
+// - Top row: icon (20px, primary color) + label (12px muted)
+// - Middle: value (28px font-bold text-foreground)
+// - Bottom: change text (12px, color by changeType)
+// - Subtle left border accent (3px) colored by changeType
+```
+
+### Revenue Chart
+
+```jsx
+// Use recharts: AreaChart or LineChart
+// Data: last 6 months revenue from GET /api/dashboard/revenue-chart
+// Config:
+//   - Area fill: primary color at 15% opacity
+//   - Line: primary color, strokeWidth 2
+//   - X-axis: month abbreviations (Jan, Feb...)
+//   - Y-axis: ₹ formatted (use toLocaleString('en-IN'))
+//   - Tooltip: custom styled with month + ₹ value
+//   - No grid lines, only subtle horizontal guides
+//   - Responsive container: height 220px
+//   - Add a "Total Revenue" label top-right with the sum
+```
+
+### Project Health Donut
+
+```jsx
+// Use recharts: PieChart with innerRadius
+// Data from GET /api/projects → compute:
+//   { onTrack: N, atRisk: N, delayed: N }
+// Colors: green (on track), amber (at risk), red (delayed)
+// Center text: total project count
+// Legend: horizontal below chart
+// Height: 220px
+```
+
+### Tasks Due Today Panel
+
+```jsx
+// GET /api/tasks?dueDate=today&status=open
+// Render as a scrollable list (max-height: 280px overflow-y-auto)
+// Each item:
+//   [Priority dot] Task title                [Assignee avatar]
+//   Project name badge      Due: Today  [Open →]
+//
+// Priority dot colors: red=high, amber=medium, gray=low
+// Empty state: "No tasks due today — great work! 🎉"
+// Footer link: "View all tasks →"
+```
+
+### Sales Pipeline Bar
+
+```jsx
+// GET /api/leads
+// Group by stage, count per stage
+// Stages: Discovery → Demo → Proposal → Negotiation → Closed
+// Render as horizontal stacked progress bar OR vertical grouped bars
+// Show: count per stage + total pipeline value (sum of lead.value)
+// Color: use a single hue with varying opacity, or distinct muted colors per stage
+// Footer: "₹X total pipeline value"
+```
+
+### Content Calendar Strip (This Week)
+
+```jsx
+// GET /api/content-posts?week=current
+// Render 7 columns (Mon–Sun)
+// Each column:
+//   Day name (Mon)
+//   Date number (14)
+//   Platform dots: colored circles per platform
+//     Instagram: gradient pink/purple dot
+//     LinkedIn: blue dot
+//     Twitter/X: black dot
+//   Count badge if > 3 posts
+// Click column → navigate to /content?date=YYYY-MM-DD
+// Today's column: highlighted with subtle bg accent
+```
+
+### Recent Activity Feed
+
+```jsx
+// Create new API endpoint: GET /api/activity?limit=10
+// Activity types to capture:
+//   - invoice.created, invoice.sent, invoice.paid
+//   - task.completed, task.created
+//   - lead.stage_changed, lead.created
+//   - project.status_changed
+//   - client.added
+//
+// Each activity item:
+//   [Icon]  Action description                    [Time ago]
+//   e.g.: 📄 Invoice #INV-045 sent to TechCorp   2 hours ago
+//
+// Render as vertical timeline (left border line + dots)
+// Max 8 items visible, "View all activity →" footer link
+// Time format: use date-fns formatDistanceToNow()
+```
+
+---
+
+## 5. API ADDITIONS NEEDED
+
+```js
+// New / modified endpoints required:
+
+// Dashboard
+GET /api/dashboard/stats
+// Response: { revenue_mtd, active_projects, tasks_due_today, open_leads, pipeline_value }
+
+GET /api/dashboard/revenue-chart
+// Response: [{ month: 'Jan', revenue: 245000 }, ...]  — last 6 months
+
+GET /api/dashboard/project-health
+// Response: { on_track: N, at_risk: N, delayed: N }
+
+// Activity Feed (new table: activity_logs)
+GET /api/activity?limit=10
+// Response: [{ type, description, entityId, entityType, createdAt, userId }]
+
+// The activity_logs table should be written to whenever:
+// - Invoice status changes
+// - Task is completed
+// - Lead stage changes
+// - Client is added
+// Use a utility function: logActivity(type, description, entityId, userId)
+
+// Tasks filtered by date
+GET /api/tasks?dueDate=today&status=open
+// Add dueDate filter support to existing tasks endpoint
+
+// Content posts for current week
+GET /api/content-posts?week=current
+// Add week=current filter: returns posts where scheduledAt BETWEEN weekStart AND weekEnd
+```
+
+---
+
+## 6. SIDEBAR UPDATES
+
+```jsx
+// Update sidebar navigation config:
+
+// Remove individual finance links:
+// ❌ { label: 'Invoices',        path: '/invoices' }
+// ❌ { label: 'Quotations',      path: '/quotations' }
+// ❌ { label: 'Purchase Orders', path: '/purchase-orders' }
+// ❌ { label: 'Proposals',       path: '/proposals' }
+
+// Add single finance entry:
+// ✅ { label: 'Finance & Docs', path: '/finance', icon: Wallet }
+
+// Keep old routes as redirects:
+// /invoices        → /finance?tab=invoices
+// /quotations      → /finance?tab=quotations
+// /purchase-orders → /finance?tab=purchase-orders
+// /proposals       → /finance?tab=proposals
+```
+
+---
+
+## 7. IMPLEMENTATION ORDER
+
+Follow this order to avoid breaking existing functionality:
+
+```
+Step 1: Create SearchBar.jsx component (standalone, no deps)
+Step 2: Add SearchBar to Tasks page + test
+Step 3: Add SearchBar to Sales, Content Calendar, Hawan Hub
+Step 4: Create FinancePage.jsx with tab shell (no content yet)
+Step 5: Move Invoices content into Finance tab — test
+Step 6: Move Quotations, POs, Proposals into Finance tabs
+Step 7: Update sidebar + add redirect routes
+Step 8: Add SearchBar inside each Finance tab
+Step 9: Install xlsx, implement Export Excel button + mapping
+Step 10: Add new dashboard API endpoints (stats, activity)
+Step 11: Redesign DashboardPage.jsx with new layout
+Step 12: Add recharts components one by one
+Step 13: Add Activity Feed table to DB + logActivity utility
+Step 14: Final QA — search works, finance tabs work, exports work
+```
+
+---
+
+## NOTES
+
+- All INR amounts: format with `toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 })`
+- All dates: use `date-fns` — already likely in project deps
+- Dark mode: all new components must use Tailwind's `dark:` variants, not hardcoded colors
+- Mobile-first: every new layout must be responsive. Finance tabs should scroll horizontally on mobile.
+- Do NOT break existing API contracts — only add, never change response shape without versioning
+- TanStack Query: use `useQuery` for all new data fetching. Invalidate correctly on mutations.

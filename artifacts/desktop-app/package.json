@@ -1,0 +1,16 @@
+{
+  "name": "@workspace/desktop-app",
+  "version": "1.0.0",
+  "private": true,
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --dir",
+    "build": "echo Desktop app build skipped"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "^39.8.5",
+    "electron-builder": "^24.13.3"
+  }
+}

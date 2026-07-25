@@ -1,0 +1,4 @@
+- [AgencyOS stack](agencyos-stack.md) — pnpm workspace migration; @base-ui/react needed; wouter Link must not wrap <a>
+- [Git commit restriction](git-commit-restriction.md) — git commit is blocked in main agent; Replit auto-commits at session end; push via `bash push-to-github.sh` after checkpoint
+- [AgencyOS dev environment](agencyos-dev-env.md) — drizzle-kit location, pnpm install quirks, orval codegen Node20 issue, @base-ui/react pnpm store fix
+- [AgencyOS feature set](agencyos-features.md) — SearchBar, Finance tabbed page, Excel export, Dashboard overhaul with recharts; pre-existing DB schema gaps (probability, priority columns missing from leads/projects)

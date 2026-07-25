@@ -1,0 +1,62 @@
+import { Router, type IRouter } from "express";
+import healthRouter from "./health";
+import authRouter from "./auth";
+import clientsRouter from "./clients";
+import leadsRouter from "./leads";
+import projectsRouter from "./projects";
+import tasksRouter from "./tasks";
+import contentRouter from "./content";
+import invoicesRouter from "./invoices";
+import quotationsRouter from "./quotations";
+import proposalsRouter from "./proposals";
+import usersRouter from "./users";
+import dashboardRouter from "./dashboard";
+import attendanceRouter from "./attendance";
+import leavesRouter from "./leaves";
+import settingsRouter from "./settings";
+import purchaseOrdersRouter from "./purchase-orders";
+import socialAccountsRouter from "./social-accounts";
+import uploadsRouter from "./uploads";
+import activityLogsRouter from "./activityLogs";
+import leadContactsRouter from "./leadContacts";
+import timeRouter from "./time";
+import feedbackRouter from "./feedback";
+import attachmentsRouter from "./attachments";
+import aiRouter from "./ai";
+import meetingsRouter from "./meetings";
+import notificationsRouter from "./notifications";
+import { requireAuth } from "../middleware/auth";
+
+const router: IRouter = Router();
+
+router.use(healthRouter);
+router.use(authRouter);
+
+router.use(requireAuth);
+
+router.use("/clients", clientsRouter);
+router.use("/leads", leadsRouter);
+router.use("/leads", leadContactsRouter);
+router.use("/projects", projectsRouter);
+router.use("/tasks", tasksRouter);
+router.use("/content-posts", contentRouter);
+router.use("/invoices", invoicesRouter);
+router.use("/quotations", quotationsRouter);
+router.use("/proposals", proposalsRouter);
+router.use("/users", usersRouter);
+router.use("/dashboard", dashboardRouter);
+router.use(attendanceRouter);
+router.use(leavesRouter);
+router.use(settingsRouter);
+router.use("/purchase-orders", purchaseOrdersRouter);
+router.use("/social-accounts", socialAccountsRouter);
+router.use("/uploads", uploadsRouter);
+router.use(activityLogsRouter);
+router.use("/time", timeRouter);
+router.use("/client", feedbackRouter);
+router.use("/attachments", attachmentsRouter);
+router.use("/ai", aiRouter);
+router.use("/meetings", meetingsRouter);
+router.use("/notifications", notificationsRouter);
+
+export default router;
