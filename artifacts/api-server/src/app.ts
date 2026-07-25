@@ -49,17 +49,56 @@ const authLimiter = rateLimit({
   validate: { trustProxy: false },
 });
 
+app.get(["/healthz", "/health"], (_req, res) => {
+  res.json({ status: "ok" });
+});
+
 app.use("/public", publicRouter);
 app.use("/api/auth", authLimiter);
 app.use("/api", router);
 
-if (process.env.SERVE_STATIC === "true") {
-  const publicDir = path.resolve(__dirname, "../../agency-os/dist/public");
-  app.use(express.static(publicDir));
-  app.get("*all", (req, res) => {
-    res.sendFile(path.resolve(publicDir, "index.html"));
-  });
-}
+const getPublicDir = () => {
+  const possiblePaths = [
+    path.resolve(process.cwd(), "dist/public"),
+    path.resolve(__dirname, "public"),
+    path.resolve(__dirname, "dist/public"),
+    path.resolve(__dirname, "../../agency-os/dist/public"),
+    path.resolve(process.cwd(), "artifacts/agency-os/dist/public"),
+  ];
+  return possiblePaths.find((p) => fs.existsSync(p));
+};
+
+app.use((req, res, next) => {
+  if (req.path.startsWith("/api")) return next();
+  const dir = getPublicDir();
+  if (dir) {
+    return express.static(dir)(req, res, next);
+  }
+  next();
+});
+
+app.use("/public", (req, res, next) => {
+  const dir = getPublicDir();
+  if (dir) {
+    return express.static(dir)(req, res, next);
+  }
+  next();
+});
+
+app.use((req, res, next) => {
+  if (req.method !== "GET" && req.method !== "HEAD") return next();
+  if (req.path.startsWith("/api") || req.path.startsWith("/public/calendar")) {
+    return next();
+  }
+  const dir = getPublicDir();
+  if (dir) {
+    const indexPath = path.resolve(dir, "index.html");
+    if (fs.existsSync(indexPath)) {
+      return res.sendFile(indexPath);
+    }
+  }
+  next();
+});
 
 app.use(errorHandler);
 

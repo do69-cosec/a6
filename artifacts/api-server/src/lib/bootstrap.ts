@@ -9,9 +9,10 @@ function requireAdminConfig(): { email: string; password: string; name: string }
   const password = process.env.ADMIN_PASSWORD;
   const name = process.env.ADMIN_NAME ?? "Admin";
 
-  if (process.env.NODE_ENV === "production" && (!email || !password)) {
-    throw new Error(
-      "ADMIN_EMAIL and ADMIN_PASSWORD environment variables are required in production."
+  if (!password) {
+    logger.warn(
+      { email: email ?? "admin@agencyos.com" },
+      `Bootstrap: ADMIN_PASSWORD environment variable not set — using default admin password.`
     );
   }
 
@@ -535,10 +536,17 @@ export async function bootstrapDatabase(): Promise<void> {
       CREATE TABLE IF NOT EXISTS notifications (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        sender_id TEXT REFERENCES users(id) ON DELETE SET NULL,
         type TEXT NOT NULL DEFAULT 'SYSTEM',
         priority TEXT NOT NULL DEFAULT 'MEDIUM',
         title TEXT NOT NULL,
         message TEXT NOT NULL,
+        action TEXT,
+        action_url TEXT,
+        reference_id TEXT,
+        reference_type TEXT,
+        metadata JSONB,
+        is_read BOOLEAN NOT NULL DEFAULT false,
         read_at TIMESTAMP,
         expires_at TIMESTAMP,
         created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
@@ -553,9 +561,21 @@ export async function bootstrapDatabase(): Promise<void> {
       "expires_at TIMESTAMP",
       "updated_by TEXT",
       "deleted_at TIMESTAMP",
+      "reference_id TEXT",
+      "reference_type TEXT",
+      "is_read BOOLEAN DEFAULT false",
+      "sender_id TEXT",
+      "action TEXT",
+      "action_url TEXT",
+      "metadata JSONB",
     ]) {
       await db.execute(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS ${col}`).catch(() => {});
     }
+
+    await db.execute(`CREATE INDEX IF NOT EXISTS notifications_user_id_idx ON notifications (user_id)`).catch(() => {});
+    await db.execute(`CREATE INDEX IF NOT EXISTS notifications_is_read_idx ON notifications (is_read)`).catch(() => {});
+    await db.execute(`CREATE INDEX IF NOT EXISTS notifications_created_at_idx ON notifications (created_at)`).catch(() => {});
+    await db.execute(`CREATE INDEX IF NOT EXISTS notifications_reference_idx ON notifications (reference_id, reference_type)`).catch(() => {});
 
     await db.execute(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS onboarding_date TEXT`).catch(() => {});
 

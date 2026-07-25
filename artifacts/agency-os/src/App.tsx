@@ -367,6 +367,7 @@ import ClientPortalPage from "@/pages/portal";
 import PublicCalendarPage from "@/pages/public-calendar";
 import PurchaseOrdersPage from "@/pages/purchase-orders";
 import ExcelReportsPage from "@/pages/excel-reports";
+import NotificationsPage from "@/pages/notifications";
 
 // ─── Protected route wrapper ────────────────────────────────────
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -579,6 +580,15 @@ function AppRouter() {
           <ProtectedRoute>
             <DashboardLayout>
               <LeavesPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/notifications">
+        {() => (
+          <ProtectedRoute>
+            <DashboardLayout>
+              <NotificationsPage />
             </DashboardLayout>
           </ProtectedRoute>
         )}

@@ -6,6 +6,7 @@ import { asyncHandler } from "../lib/asyncHandler";
 import { createError } from "../middleware/errorHandler";
 import { sanitizeAndValidate } from "../lib/validation";
 import { requirePermission } from "../middleware/auth";
+import { NotificationService } from "../services/notificationService";
 
 const router = Router();
 
@@ -87,14 +88,17 @@ router.post("/", requirePermission("projects.create"), asyncHandler(async (req, 
   const requesterId = (req as any).userId;
   const [row] = await db.insert(projectsTable).values({ ...sanitized, createdBy: requesterId }).returning();
 
-  if (row && row.assignedTo) {
+  if (row && row.assignedTo && row.assignedTo !== requesterId) {
     try {
-      await db.insert(notifications).values({
+      await NotificationService.createNotification({
         userId: row.assignedTo,
-        title: "New Project Assignment",
+        title: "📁 New Project Assignment",
         message: `You have been assigned to project '${row.name}'.`,
-        type: "PROJECT_ASSIGNMENT",
-        link: "/projects",
+        type: "PROJECT",
+        priority: (row.priority as any) || "HIGH",
+        referenceId: row.id,
+        referenceType: "PROJECT",
+        createdBy: requesterId,
       });
     } catch (e) {
       console.warn("Failed to create project assignment notification:", e);
@@ -190,42 +194,82 @@ router.patch("/:id", requirePermission("projects.edit"), asyncHandler(async (req
   // Handle notifications
   try {
     // 1. If assignedTo changed or newly set
-    if (sanitized.assignedTo && sanitized.assignedTo !== project.assignedTo) {
-      await db.insert(notifications).values({
+    if (sanitized.assignedTo && sanitized.assignedTo !== project.assignedTo && sanitized.assignedTo !== requesterId) {
+      await NotificationService.createNotification({
         userId: sanitized.assignedTo,
-        title: "New Project Assignment",
+        title: "📁 Project Assignment",
         message: `You have been assigned to project '${row.name}'.`,
-        type: "PROJECT_ASSIGNMENT",
-        link: "/projects",
+        type: "PROJECT",
+        priority: "HIGH",
+        referenceId: row.id,
+        referenceType: "PROJECT",
+        createdBy: requesterId,
       });
     }
 
     // 2. If employee accepted or rejected
     if (sanitized.assignmentStatus && (sanitized.assignmentStatus === "ACCEPTED" || sanitized.assignmentStatus === "REJECTED")) {
-      // Get employee name
       const [emp] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, requesterId));
       const empName = emp?.name || "An employee";
 
-      // Determine who to notify: creator and admins
       const admins = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.systemRole, "SUPER_ADMIN"));
       const recipients = new Set<string>();
       if (project.createdBy) recipients.add(project.createdBy);
       admins.forEach((a) => recipients.add(a.id));
 
       const isAccepted = sanitized.assignmentStatus === "ACCEPTED";
-      const title = isAccepted ? "Project Assignment Accepted" : "Project Assignment Rejected";
+      const title = isAccepted ? "✅ Project Assignment Accepted" : "❌ Project Assignment Rejected";
       const message = isAccepted
         ? `${empName} accepted the project assignment for '${row.name}'.`
         : `${empName} rejected project '${row.name}'. Reason: ${sanitized.rejectionReason || "No reason specified"}`;
 
       for (const rId of recipients) {
         if (rId !== requesterId) {
-          await db.insert(notifications).values({
+          await NotificationService.createNotification({
             userId: rId,
             title,
             message,
-            type: isAccepted ? "PROJECT_ACCEPTED" : "PROJECT_REJECTED",
-            link: "/projects",
+            type: "PROJECT",
+            priority: isAccepted ? "MEDIUM" : "HIGH",
+            referenceId: row.id,
+            referenceType: "PROJECT",
+            createdBy: requesterId,
+          });
+        }
+      }
+    }
+
+    // 3. Deadline changed
+    if (sanitized.dueDate && sanitized.dueDate !== project.dueDate && row.assignedTo && row.assignedTo !== requesterId) {
+      await NotificationService.createNotification({
+        userId: row.assignedTo,
+        title: "⏰ Project Deadline Changed",
+        message: `Deadline for project '${row.name}' was updated to ${sanitized.dueDate}`,
+        type: "PROJECT",
+        priority: "HIGH",
+        referenceId: row.id,
+        referenceType: "PROJECT",
+        createdBy: requesterId,
+      });
+    }
+
+    // 4. Project Completed
+    if (sanitized.status === "COMPLETED" && project.status !== "COMPLETED") {
+      const notifyUsers = new Set<string>();
+      if (row.assignedTo) notifyUsers.add(row.assignedTo);
+      if (row.createdBy) notifyUsers.add(row.createdBy);
+
+      for (const targetId of notifyUsers) {
+        if (targetId !== requesterId) {
+          await NotificationService.createNotification({
+            userId: targetId,
+            title: "🎉 Project Completed",
+            message: `Project '${row.name}' has been marked as COMPLETED`,
+            type: "PROJECT",
+            priority: "HIGH",
+            referenceId: row.id,
+            referenceType: "PROJECT",
+            createdBy: requesterId,
           });
         }
       }

@@ -6,6 +6,7 @@ import { requirePermission } from "../middleware/auth";
 import { asyncHandler } from "../lib/asyncHandler";
 import { createError } from "../middleware/errorHandler";
 import { isValidUUID } from "../lib/validation";
+import { NotificationService } from "../services/notificationService";
 
 const router = Router();
 
@@ -150,19 +151,15 @@ router.post("/", requirePermission("time.log"), asyncHandler(async (req, res) =>
     minute: "2-digit",
   });
 
-  const notificationRows = targetUserIds.map((uId) => ({
-    id: crypto.randomUUID(),
-    userId: uId,
-    type: "MEETING",
-    priority: "HIGH",
+  await NotificationService.createNotificationsForUsers(targetUserIds, {
     title: `📅 New Meeting: ${title}`,
     message: `You are invited to "${title}" scheduled for ${formattedTime}.${meetingLink ? ` Link: ${meetingLink}` : ""}`,
+    type: "MEETING",
+    priority: "HIGH",
+    referenceId: meetingId,
+    referenceType: "MEETING",
     createdBy: userId,
-  }));
-
-  if (notificationRows.length > 0) {
-    await db.insert(notifications).values(notificationRows);
-  }
+  });
 
   return res.status(201).json({
     ...newMeeting,
@@ -264,19 +261,15 @@ router.put("/:id", requirePermission("time.log"), asyncHandler(async (req, res) 
       minute: "2-digit",
     });
 
-    const notificationRows = attendeeUserIds.map((uId) => ({
-      id: crypto.randomUUID(),
-      userId: uId,
+    await NotificationService.createNotificationsForUsers(attendeeUserIds, {
+      title: `📝 Updated Meeting: ${title}`,
+      message: `Meeting details updated for "${title}" scheduled for ${formattedTime}.${meetingLink ? ` Link: ${meetingLink}` : ""}`,
       type: "MEETING",
       priority: "MEDIUM",
-      title: `📝 Updated Meeting: ${title}`,
-      message: `Meeting details updated for "${title}" on ${formattedTime}.${meetingLink ? ` Link: ${meetingLink}` : ""}`,
+      referenceId: id,
+      referenceType: "MEETING",
       createdBy: userId,
-    }));
-
-    if (notificationRows.length > 0) {
-      await db.insert(notifications).values(notificationRows);
-    }
+    });
   }
 
   return res.json({

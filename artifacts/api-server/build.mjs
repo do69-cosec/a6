@@ -12,7 +12,7 @@ const artifactDir = path.dirname(fileURLToPath(import.meta.url));
 
 async function buildAll() {
   const distDir = path.resolve(artifactDir, "dist");
-  await rm(distDir, { recursive: true, force: true });
+  await rm(distDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }).catch(() => {});
 
   await esbuild({
     entryPoints: [path.resolve(artifactDir, "src/index.ts")],
@@ -67,7 +67,9 @@ async function buildAll() {
       "@google/*",
       "googleapis",
       "firebase-admin",
-      "alasql",
+      "react-native",
+      "react-native-fs",
+      "react-native-fetch-blob",
       "@parcel/watcher",
       "@sentry/profiling-node",
       "@tree-sitter/*",

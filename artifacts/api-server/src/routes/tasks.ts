@@ -7,6 +7,7 @@ import { asyncHandler } from "../lib/asyncHandler";
 import { createError } from "../middleware/errorHandler";
 import { sanitizeAndValidate } from "../lib/validation";
 import { requirePermission } from "../middleware/auth";
+import { NotificationService } from "../services/notificationService";
 
 const requesterTable = alias(usersTable, "requester_users");
 const approvedByTable = alias(usersTable, "approved_by_users");
@@ -108,6 +109,21 @@ router.post("/", requirePermission("tasks.create"), asyncHandler(async (req, res
   }
 
   const [row] = await db.insert(tasksTable).values({ ...sanitized, createdBy: requesterId }).returning();
+
+  // Send Notification if assigned to an employee
+  if (row.assigneeId && row.assigneeId !== requesterId) {
+    await NotificationService.createNotification({
+      userId: row.assigneeId,
+      title: "📋 New Task Assigned",
+      message: `You have been assigned task "${row.title}"`,
+      type: "TASK",
+      priority: (row.priority as any) || "MEDIUM",
+      referenceId: row.id,
+      referenceType: "TASK",
+      createdBy: requesterId,
+    });
+  }
+
   return res.status(201).json(row);
 }));
 
@@ -217,6 +233,98 @@ router.patch("/:id", requirePermission("tasks.edit"), asyncHandler(async (req, r
     .where(eq(tasksTable.id, (req.params.id as string)))
     .returning();
   if (!row) throw createError("Not found", 404);
+
+  // Process task notifications
+  try {
+    // 1. Assignee changed
+    if (row.assigneeId && row.assigneeId !== task.assigneeId && row.assigneeId !== requesterId) {
+      await NotificationService.createNotification({
+        userId: row.assigneeId,
+        title: "📋 Task Assigned",
+        message: `You have been assigned task "${row.title}"`,
+        type: "TASK",
+        priority: (row.priority as any) || "MEDIUM",
+        referenceId: row.id,
+        referenceType: "TASK",
+        createdBy: requesterId,
+      });
+    }
+
+    // 2. Approval status changed
+    if (sanitized.approvalStatus && sanitized.approvalStatus !== task.approvalStatus && task.requestedBy) {
+      if (sanitized.approvalStatus === "APPROVED" && task.requestedBy !== requesterId) {
+        await NotificationService.createNotification({
+          userId: task.requestedBy,
+          title: "✅ Task Approved",
+          message: `Your requested task "${row.title}" was approved`,
+          type: "TASK",
+          priority: "HIGH",
+          referenceId: row.id,
+          referenceType: "TASK",
+          createdBy: requesterId,
+        });
+      } else if (sanitized.approvalStatus === "REJECTED" && task.requestedBy !== requesterId) {
+        await NotificationService.createNotification({
+          userId: task.requestedBy,
+          title: "❌ Task Request Rejected",
+          message: `Your requested task "${row.title}" was rejected`,
+          type: "TASK",
+          priority: "HIGH",
+          referenceId: row.id,
+          referenceType: "TASK",
+          createdBy: requesterId,
+        });
+      }
+    }
+
+    // 3. Status changed to DONE/COMPLETED
+    if ((row.status === "DONE" || row.status === "COMPLETED") && task.status !== row.status) {
+      const notifyTarget = task.requestedBy || task.createdBy;
+      if (notifyTarget && notifyTarget !== requesterId) {
+        await NotificationService.createNotification({
+          userId: notifyTarget,
+          title: "🎉 Task Completed",
+          message: `Task "${row.title}" has been completed`,
+          type: "TASK",
+          priority: "MEDIUM",
+          referenceId: row.id,
+          referenceType: "TASK",
+          createdBy: requesterId,
+        });
+      }
+    }
+
+    // 4. Due date changed
+    if (sanitized.dueDate && sanitized.dueDate !== task.dueDate && row.assigneeId && row.assigneeId !== requesterId) {
+      await NotificationService.createNotification({
+        userId: row.assigneeId,
+        title: "⏰ Task Deadline Changed",
+        message: `Deadline for task "${row.title}" changed to ${sanitized.dueDate}`,
+        type: "TASK",
+        priority: "MEDIUM",
+        referenceId: row.id,
+        referenceType: "TASK",
+        createdBy: requesterId,
+      });
+    }
+
+    // 5. Priority changed
+    if (sanitized.priority && sanitized.priority !== task.priority && row.assigneeId && row.assigneeId !== requesterId) {
+      await NotificationService.createNotification({
+        userId: row.assigneeId,
+        title: "⚡ Task Priority Updated",
+        message: `Priority for task "${row.title}" was updated to ${sanitized.priority}`,
+        type: "TASK",
+        priority: (sanitized.priority as any) || "MEDIUM",
+        referenceId: row.id,
+        referenceType: "TASK",
+        createdBy: requesterId,
+      });
+    }
+  } catch (err) {
+    console.error("Error triggering task notification:", err);
+  }
+
   return res.json(row);
 }));
 

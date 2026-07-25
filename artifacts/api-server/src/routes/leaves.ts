@@ -6,6 +6,7 @@ import { requirePermission } from "../middleware/auth";
 import { asyncHandler } from "../lib/asyncHandler";
 import { createError } from "../middleware/errorHandler";
 import { sanitizeAndValidate, isValidUUID } from "../lib/validation";
+import { NotificationService } from "../services/notificationService";
 
 const router = Router();
 
@@ -66,6 +67,27 @@ router.post("/leaves", requirePermission("leave.apply"), asyncHandler(async (req
     status: "PENDING",
   }).returning();
 
+  // Notify Admins about new leave request
+  try {
+    const admins = await db.select({ id: users.id }).from(users).where(eq(users.systemRole, "SUPER_ADMIN"));
+    for (const admin of admins) {
+      if (admin.id !== userId) {
+        await NotificationService.createNotification({
+          userId: admin.id,
+          title: "🏖️ New Leave Request",
+          message: `${user.name} applied for ${sanitized.type} leave (${sanitized.startDate} to ${sanitized.endDate})`,
+          type: "LEAVE",
+          priority: "HIGH",
+          referenceId: leave.id,
+          referenceType: "LEAVE",
+          createdBy: userId,
+        });
+      }
+    }
+  } catch (e) {
+    console.warn("Failed to notify admins on leave application:", e);
+  }
+
   return res.status(201).json({ ...leave, userName: user.name, createdAt: leave.createdAt?.toISOString() ?? null });
 }));
 
@@ -79,6 +101,25 @@ router.post("/leaves/:id/approve", requirePermission("leave.approve"), asyncHand
     .where(eq(leaveRequests.id, (req.params.id as string)))
     .returning();
   if (!updated) throw createError("Not found", 404);
+
+  // Notify employee
+  try {
+    if (updated.userId !== userId) {
+      await NotificationService.createNotification({
+        userId: updated.userId,
+        title: "✅ Leave Request Approved",
+        message: `Your ${updated.type} leave request (${updated.startDate} to ${updated.endDate}) was APPROVED.`,
+        type: "LEAVE",
+        priority: "HIGH",
+        referenceId: updated.id,
+        referenceType: "LEAVE",
+        createdBy: userId,
+      });
+    }
+  } catch (e) {
+    console.warn("Failed to notify user on leave approval:", e);
+  }
+
   return res.json({ ...updated, createdAt: updated.createdAt?.toISOString() ?? null });
 }));
 
@@ -92,6 +133,25 @@ router.post("/leaves/:id/reject", requirePermission("leave.approve"), asyncHandl
     .where(eq(leaveRequests.id, (req.params.id as string)))
     .returning();
   if (!updated) throw createError("Not found", 404);
+
+  // Notify employee
+  try {
+    if (updated.userId !== userId) {
+      await NotificationService.createNotification({
+        userId: updated.userId,
+        title: "❌ Leave Request Rejected",
+        message: `Your ${updated.type} leave request (${updated.startDate} to ${updated.endDate}) was REJECTED.`,
+        type: "LEAVE",
+        priority: "HIGH",
+        referenceId: updated.id,
+        referenceType: "LEAVE",
+        createdBy: userId,
+      });
+    }
+  } catch (e) {
+    console.warn("Failed to notify user on leave rejection:", e);
+  }
+
   return res.json({ ...updated, createdAt: updated.createdAt?.toISOString() ?? null });
 }));
 
